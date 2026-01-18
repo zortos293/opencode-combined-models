@@ -1,0 +1,22 @@
+{
+  "name": "opencode-combined-models",
+  "version": "0.1.0",
+  "description": "OpenCode plugin that combines the same model from multiple providers with automatic failover",
+  "main": "src/index.ts",
+  "type": "module",
+  "keywords": ["opencode", "opencode-plugin", "ai", "llm", "fallback", "failover", "provider", "combined-models"],
+  "author": "zortos293",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zortos293/opencode-combined-models.git"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "latest",
+    "@opencode-ai/sdk": "latest",
+    "typescript": "^5.0.0"
+  }
+}
