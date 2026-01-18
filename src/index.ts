@@ -9,6 +9,7 @@ interface Options {
   min_providers?: number
   strategy?: string
   max_attempts?: number
+  combine_latest?: boolean  // If true, combine model and model-latest (default: false)
 }
 
 function loadConfig(): Options {
@@ -24,14 +25,38 @@ function loadConfig(): Options {
   return {}
 }
 
-function normalizeModelName(modelID: string): string {
-  return modelID.toLowerCase()
-    .replace(/^(us|eu|ap|apac|jp|au|global)./, "")
-    .replace(/^anthropic./, "")
-    .replace(/-d{8}$/, "")
-    .replace(/./g, "-")
-    .replace(/--+/g, "-")
-    .replace(/-$/, "")
+function normalizeModelName(modelID: string, combineLatest: boolean): string {
+  let normalized = modelID.toLowerCase()
+  
+  // Remove provider-specific prefixes only (e.g., bedrock regional prefixes)
+  normalized = normalized
+    .replace(/^(us|eu|ap|apac|jp|au|global)./, "")  // AWS region prefixes
+    .replace(/^anthropic./, "")  // Bedrock anthropic prefix
+    .replace(/^openai//, "")     // OpenRouter style prefixes
+    .replace(/^anthropic//, "")
+    .replace(/^google//, "")
+    .replace(/^meta-llama//, "")
+    .replace(/^mistralai//, "")
+  
+  // Remove date stamps (e.g., -20250514) but keep version numbers (e.g., -4, -4-5, -4.5)
+  normalized = normalized.replace(/-d{8}$/, "")
+  
+  // Remove version stamps like -v1:0
+  normalized = normalized.replace(/-vd+:d+$/, "")
+  
+  // Optionally remove -latest suffix
+  if (combineLatest) {
+    normalized = normalized.replace(/-latest$/, "")
+    normalized = normalized.replace(/:latest$/, "")
+  }
+  
+  // Normalize dots to dashes for consistency (4.5 -> 4-5)
+  normalized = normalized.replace(/./g, "-")
+  
+  // Clean up multiple dashes
+  normalized = normalized.replace(/--+/g, "-").replace(/-$/, "")
+  
+  return normalized
 }
 
 export const CombinedModelsPlugin: Plugin = async (_input) => {
@@ -40,6 +65,7 @@ export const CombinedModelsPlugin: Plugin = async (_input) => {
   const minProviders = cfg.min_providers ?? 2
   const strategy = cfg.strategy ?? "on_error"
   const maxAttempts = cfg.max_attempts ?? 3
+  const combineLatest = cfg.combine_latest ?? false
 
   const hooks: Hooks = {
     "provider.list": async (_input, output) => {
@@ -48,7 +74,7 @@ export const CombinedModelsPlugin: Plugin = async (_input) => {
 
       for (const [providerID, provider] of Object.entries(providers)) {
         for (const [modelID, model] of Object.entries(provider.models)) {
-          const normalizedName = normalizeModelName(modelID)
+          const normalizedName = normalizeModelName(modelID, combineLatest)
           if (!modelsByName[normalizedName]) modelsByName[normalizedName] = []
           modelsByName[normalizedName].push({ providerID, model: model as Model })
         }
