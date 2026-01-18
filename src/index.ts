@@ -1,18 +1,33 @@
 import type { Plugin, Hooks, ProviderWithModels } from "@opencode-ai/plugin"
 import type { Model, Config } from "@opencode-ai/sdk"
+import { readFileSync, existsSync } from "fs"
+import { join } from "path"
+import { homedir } from "os"
 
-/**
- * Plugin options that can be set in opencode.json under "combined_models" key
- */
 export interface CombinedModelsOptions {
-  /** Provider priority order - providers listed first will be tried first */
   provider_priority?: string[]
-  /** Minimum number of providers required to create a combined model (default: 2) */
   min_providers?: number
-  /** Fallback strategy: "on_error" | "on_rate_limit" | "on_overload" (default: "on_error") */
   strategy?: "on_error" | "on_rate_limit" | "on_overload"
-  /** Max retry attempts per provider before moving to next (default: 3) */
   max_attempts?: number
+}
+
+function loadOptions(): CombinedModelsOptions {
+  const configPaths = [
+    join(homedir(), ".config", "opencode", "combined-models.json"),
+    join(homedir(), ".opencode", "combined-models.json"),
+  ]
+  
+  for (const configPath of configPaths) {
+    if (existsSync(configPath)) {
+      try {
+        const content = readFileSync(configPath, "utf-8")
+        return JSON.parse(content) as CombinedModelsOptions
+      } catch (e) {
+        console.error("[combined-models] Failed to parse config:", configPath, e)
+      }
+    }
+  }
+  return {}
 }
 
 function normalizeModelName(modelID: string): string {
@@ -25,14 +40,12 @@ function normalizeModelName(modelID: string): string {
     .replace(/^google//, "")
     .replace(/^meta-llama//, "")
     .replace(/^mistralai//, "")
-  normalized = normalized
     .replace(/-d{8}$/, "")
     .replace(/-vd+:d+$/, "")
     .replace(/:latest$/, "")
     .replace(/-latest$/, "")
     .replace(/@d{4}-d{2}-d{2}$/, "")
     .replace(/-preview$/, "")
-  normalized = normalized
     .replace(/./g, "-")
     .replace(/--+/g, "-")
     .replace(/-$/, "")
@@ -40,25 +53,21 @@ function normalizeModelName(modelID: string): string {
 }
 
 export const CombinedModelsPlugin: Plugin = async (_input) => {
-  const hooks: Hooks = {
-    "provider.list": async (input, output) => {
-      const config = input.config as Config & { combined_models?: CombinedModelsOptions }
-      const options = config.combined_models ?? {}
-      const providers = output.providers
-      
-      const providerPriority = options.provider_priority ?? []
-      const minProviders = options.min_providers ?? 2
-      const strategy = options.strategy ?? "on_error"
-      const maxAttempts = options.max_attempts ?? 3
+  const options = loadOptions()
+  const providerPriority = options.provider_priority ?? []
+  const minProviders = options.min_providers ?? 2
+  const strategy = options.strategy ?? "on_error"
+  const maxAttempts = options.max_attempts ?? 3
 
+  const hooks: Hooks = {
+    "provider.list": async (_input, output) => {
+      const providers = output.providers
       const modelsByName: Record<string, { providerID: string; model: Model }[]> = {}
 
       for (const [providerID, provider] of Object.entries(providers)) {
         for (const [modelID, model] of Object.entries(provider.models)) {
           const normalizedName = normalizeModelName(modelID)
-          if (!modelsByName[normalizedName]) {
-            modelsByName[normalizedName] = []
-          }
+          if (!modelsByName[normalizedName]) modelsByName[normalizedName] = []
           modelsByName[normalizedName].push({ providerID, model: model as Model })
         }
       }
@@ -87,11 +96,7 @@ export const CombinedModelsPlugin: Plugin = async (_input) => {
           name: baseModel.name + " (" + sorted.length + " providers)",
           options: {
             ...baseModel.options,
-            combined: {
-              models: modelList,
-              strategy: strategy,
-              max_attempts: maxAttempts,
-            },
+            combined: { models: modelList, strategy, max_attempts: maxAttempts },
           },
         }
       }
