@@ -4,9 +4,9 @@ An [OpenCode](https://github.com/anomalyco/opencode) plugin that automatically c
 
 ## Features
 
-- **Automatic Detection**: Automatically detects when the same model (e.g., Claude Sonnet 4) is available from multiple providers (Anthropic, AWS Bedrock, Google Vertex, etc.)
+- **Automatic Detection**: Automatically detects when the same model (e.g., Claude Sonnet 4) is available from multiple providers
 - **Virtual Combined Models**: Creates a virtual "combined" provider with models that can failover between providers
-- **Configurable Priority**: Set your preferred provider order via `provider_priority` in your config
+- **Configurable Priority**: Set your preferred provider order
 - **Automatic Failover**: When one provider hits rate limits or errors, automatically switches to the next available provider
 
 ## Requirements
@@ -19,27 +19,38 @@ This plugin requires the `provider.list` hook which is proposed in [opencode#927
 npm install opencode-combined-models
 ```
 
-Or add to your `opencode.json`:
+Or use a local path in your `opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-combined-models"]
+  "plugin": ["file:///path/to/opencode-combined-models-plugin"]
 }
 ```
 
 ## Configuration
 
-### Provider Priority
-
-Set your preferred provider order in `opencode.json`:
+Add a `combined_models` section to your `opencode.json`:
 
 ```json
 {
-  "provider_priority": ["anthropic", "amazon-bedrock", "google-vertex", "openrouter"]
+  "plugin": ["opencode-combined-models"],
+  "combined_models": {
+    "provider_priority": ["anthropic", "github-copilot", "amazon-bedrock", "openrouter"],
+    "min_providers": 2,
+    "strategy": "on_error",
+    "max_attempts": 3
+  }
 }
 ```
 
-Providers listed first will be tried first. Providers not in the list will be sorted alphabetically after the prioritized ones.
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `provider_priority` | `string[]` | `[]` | Provider order - first providers are tried first. Unlisted providers are sorted alphabetically. |
+| `min_providers` | `number` | `2` | Minimum providers needed to create a combined model |
+| `strategy` | `string` | `"on_error"` | When to failover: `"on_error"`, `"on_rate_limit"`, or `"on_overload"` |
+| `max_attempts` | `number` | `3` | Retry attempts per provider before moving to next |
 
 ## How It Works
 

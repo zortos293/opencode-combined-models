@@ -1,6 +1,20 @@
 import type { Plugin, Hooks, ProviderWithModels } from "@opencode-ai/plugin"
 import type { Model, Config } from "@opencode-ai/sdk"
 
+/**
+ * Plugin options that can be set in opencode.json under "combined_models" key
+ */
+export interface CombinedModelsOptions {
+  /** Provider priority order - providers listed first will be tried first */
+  provider_priority?: string[]
+  /** Minimum number of providers required to create a combined model (default: 2) */
+  min_providers?: number
+  /** Fallback strategy: "on_error" | "on_rate_limit" | "on_overload" (default: "on_error") */
+  strategy?: "on_error" | "on_rate_limit" | "on_overload"
+  /** Max retry attempts per provider before moving to next (default: 3) */
+  max_attempts?: number
+}
+
 function normalizeModelName(modelID: string): string {
   let normalized = modelID.toLowerCase()
   normalized = normalized
@@ -28,8 +42,15 @@ function normalizeModelName(modelID: string): string {
 export const CombinedModelsPlugin: Plugin = async (_input) => {
   const hooks: Hooks = {
     "provider.list": async (input, output) => {
-      const config = input.config as Config & { provider_priority?: string[] }
+      const config = input.config as Config & { combined_models?: CombinedModelsOptions }
+      const options = config.combined_models ?? {}
       const providers = output.providers
+      
+      const providerPriority = options.provider_priority ?? []
+      const minProviders = options.min_providers ?? 2
+      const strategy = options.strategy ?? "on_error"
+      const maxAttempts = options.max_attempts ?? 3
+
       const modelsByName: Record<string, { providerID: string; model: Model }[]> = {}
 
       for (const [providerID, provider] of Object.entries(providers)) {
@@ -43,10 +64,9 @@ export const CombinedModelsPlugin: Plugin = async (_input) => {
       }
 
       const combinedModels: Record<string, Model> = {}
-      const providerPriority = config.provider_priority ?? []
 
       for (const [normalizedName, providerModels] of Object.entries(modelsByName)) {
-        if (providerModels.length < 2) continue
+        if (providerModels.length < minProviders) continue
 
         const sorted = providerModels.sort((a, b) => {
           const indexA = providerPriority.indexOf(a.providerID)
@@ -69,8 +89,8 @@ export const CombinedModelsPlugin: Plugin = async (_input) => {
             ...baseModel.options,
             combined: {
               models: modelList,
-              strategy: "on_error",
-              max_attempts: 3,
+              strategy: strategy,
+              max_attempts: maxAttempts,
             },
           },
         }
