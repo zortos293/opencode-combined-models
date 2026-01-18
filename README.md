@@ -13,18 +13,58 @@ An [OpenCode](https://github.com/anomalyco/opencode) plugin that automatically c
 
 This plugin requires the `provider.list` hook which is proposed in [opencode#9270](https://github.com/anomalyco/opencode/issues/9270).
 
+Until this is merged into main, you need to build OpenCode from the feature branch.
+
+## Building OpenCode with Plugin Support
+
+1. Clone and checkout the feature branch:
+   ```bash
+   git clone https://github.com/zortos293/opencode.git
+   cd opencode
+   git checkout feat/plugin-provider-list-hook
+   ```
+
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+
+3. Build for your platform:
+   ```bash
+   cd packages/opencode
+   bun run build --single
+   ```
+
+4. The binary will be in `dist/opencode-{platform}-{arch}/bin/opencode`
+
+5. Copy to your PATH:
+   ```bash
+   # Linux/macOS
+   cp dist/opencode-*/bin/opencode ~/.local/bin/
+
+   # Windows
+   copy distopencode-windows-x64inopencode.exe %USERPROFILE%.bunin   ```
+
 ## Installation
 
+Clone this plugin locally:
+
 ```bash
-npm install opencode-combined-models
+git clone https://github.com/zortos293/opencode-combined-models.git
 ```
 
-Or use a local path in your `opencode.json`:
+Then reference it in your `opencode.json`:
 
 ```json
 {
-  "plugin": ["file:///path/to/opencode-combined-models-plugin"]
+  "plugin": ["file:///path/to/opencode-combined-models"]
 }
+```
+
+Or once published to npm:
+
+```bash
+npm install opencode-combined-models
 ```
 
 ## Configuration
@@ -33,7 +73,7 @@ Add a `combined_models` section to your `opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-combined-models"],
+  "plugin": ["file:///path/to/opencode-combined-models"],
   "combined_models": {
     "provider_priority": ["anthropic", "github-copilot", "amazon-bedrock", "openrouter"],
     "min_providers": 2,
