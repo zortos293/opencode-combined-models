@@ -1,8 +1,5 @@
 import type { Plugin, Hooks, ProviderWithModels } from "@opencode-ai/plugin"
 import type { Model, Config } from "@opencode-ai/sdk"
-import { readFileSync, existsSync } from "fs"
-import { join } from "path"
-import { homedir } from "os"
 
 export interface CombinedModelsOptions {
   provider_priority?: string[]
@@ -12,20 +9,25 @@ export interface CombinedModelsOptions {
 }
 
 function loadOptions(): CombinedModelsOptions {
-  const configPaths = [
-    join(homedir(), ".config", "opencode", "combined-models.json"),
-    join(homedir(), ".opencode", "combined-models.json"),
-  ]
-  
-  for (const configPath of configPaths) {
-    if (existsSync(configPath)) {
+  // Try to load config from file
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || ""
+    const paths = [
+      home + "/.config/opencode/combined-models.json",
+      home + "/.opencode/combined-models.json",
+    ]
+    
+    for (const p of paths) {
       try {
-        const content = readFileSync(configPath, "utf-8")
-        return JSON.parse(content) as CombinedModelsOptions
-      } catch (e) {
-        console.error("[combined-models] Failed to parse config:", configPath, e)
+        const file = Bun.file(p)
+        const text = await file.text()
+        return JSON.parse(text)
+      } catch {
+        // File doesn't exist or can't be read
       }
     }
+  } catch {
+    // Bun.file not available or other error
   }
   return {}
 }
@@ -53,11 +55,27 @@ function normalizeModelName(modelID: string): string {
 }
 
 export const CombinedModelsPlugin: Plugin = async (_input) => {
-  const options = loadOptions()
-  const providerPriority = options.provider_priority ?? []
-  const minProviders = options.min_providers ?? 2
-  const strategy = options.strategy ?? "on_error"
-  const maxAttempts = options.max_attempts ?? 3
+  // Default options - can be overridden by config file
+  let providerPriority: string[] = []
+  let minProviders = 2
+  let strategy = "on_error"
+  let maxAttempts = 3
+
+  // Try to load config
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || ""
+    const configPath = home + "/.config/opencode/combined-models.json"
+    const file = Bun.file(configPath)
+    if (await file.exists()) {
+      const options = await file.json()
+      providerPriority = options.provider_priority ?? providerPriority
+      minProviders = options.min_providers ?? minProviders
+      strategy = options.strategy ?? strategy
+      maxAttempts = options.max_attempts ?? maxAttempts
+    }
+  } catch (e) {
+    // Config file doesn't exist or can't be parsed - use defaults
+  }
 
   const hooks: Hooks = {
     "provider.list": async (_input, output) => {
